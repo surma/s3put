@@ -48,7 +48,8 @@ func main() {
 	go func() {
 		for _, prefix := range options.Remainder {
 			if !filepath.IsAbs(prefix) {
-				log.Fatalf("Path %s is not absolute", prefix)
+				log.Printf("Path %s is not absolute", prefix)
+				continue
 			}
 			filepath.Walk(prefix, func(path string, info os.FileInfo, err error) error {
 				if info.IsDir() {
