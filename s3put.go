@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	VERSION = "1.0"
+	VERSION = "1.0.1"
 )
 
 type Item struct {
@@ -88,6 +88,18 @@ func listLocalFiles(path ...string) <-chan *Item {
 				log.Printf("Path %s could not be made absolute: %s. Skipping...", prefix, err)
 				continue
 			}
+			if fi, err := os.Stat(newprefix); err != nil || !fi.IsDir() {
+				if err != nil {
+					log.Printf("Could not stat %s: %s. Skipping...", newprefix, err)
+				} else if !fi.IsDir() {
+					c <- &Item{
+						Prefix:   filepath.Dir(newprefix),
+						Path:     newprefix,
+						FileInfo: fi,
+					}
+				}
+				continue
+			}
 			log.Printf("Traversing %s...", newprefix)
 			filepath.Walk(newprefix, func(path string, info os.FileInfo, err error) error {
 				if info.IsDir() {
@@ -109,15 +121,22 @@ func listLocalFiles(path ...string) <-chan *Item {
 func listBucketFiles(bucket *s3.Bucket) <-chan *Item {
 	c := make(chan *Item)
 	go func() {
-		resp, err := bucket.List(options.Get.Prefix, "", "", 1000000)
-		if err != nil {
-			log.Printf("Could not list items in bucket: %s", err)
-		}
-		for _, item := range resp.Contents {
-			c <- &Item{
-				Prefix:   options.Get.Prefix,
-				Path:     item.Key,
-				FileInfo: nil,
+		marker := ""
+		for {
+			resp, err := bucket.List(options.Get.Prefix, "", marker, 1000)
+			if err != nil {
+				log.Printf("Could not list items in bucket: %s", err)
+			}
+			for _, item := range resp.Contents {
+				c <- &Item{
+					Prefix:   options.Get.Prefix,
+					Path:     item.Key,
+					FileInfo: nil,
+				}
+				marker = item.Key
+			}
+			if !resp.IsTruncated {
+				break
 			}
 		}
 		close(c)
@@ -164,10 +183,16 @@ func getFiles(bucket *s3.Bucket, c <-chan *Item) {
 					dirname, fname := filepath.Split(itempath)
 					dirname = filepath.Join(options.Remainder[0], dirname)
 
-					os.MkdirAll(dirname, os.FileMode(0755))
+					err := os.MkdirAll(dirname, os.FileMode(0755))
+					if err != nil {
+						log.Printf("Could not create target folder %s: %s", dirname, err)
+						return
+					}
+
 					f, err := os.Create(filepath.Join(dirname, fname))
 					if err != nil {
 						log.Printf("Opening %s failed: %s", item.Path, err)
+						return
 					}
 					defer f.Close()
 
