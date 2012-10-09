@@ -88,6 +88,18 @@ func listLocalFiles(path ...string) <-chan *Item {
 				log.Printf("Path %s could not be made absolute: %s. Skipping...", prefix, err)
 				continue
 			}
+			if fi, err := os.Stat(newprefix); err != nil || !fi.IsDir() {
+				if err != nil {
+					log.Printf("Could not stat %s: %s. Skipping...", newprefix, err)
+				} else if !fi.IsDir() {
+					c <- &Item{
+						Prefix:   filepath.Dir(newprefix),
+						Path:     newprefix,
+						FileInfo: fi,
+					}
+				}
+				continue
+			}
 			log.Printf("Traversing %s...", newprefix)
 			filepath.Walk(newprefix, func(path string, info os.FileInfo, err error) error {
 				if info.IsDir() {
