@@ -109,15 +109,22 @@ func listLocalFiles(path ...string) <-chan *Item {
 func listBucketFiles(bucket *s3.Bucket) <-chan *Item {
 	c := make(chan *Item)
 	go func() {
-		resp, err := bucket.List(options.Get.Prefix, "", "", 1000000)
-		if err != nil {
-			log.Printf("Could not list items in bucket: %s", err)
-		}
-		for _, item := range resp.Contents {
-			c <- &Item{
-				Prefix:   options.Get.Prefix,
-				Path:     item.Key,
-				FileInfo: nil,
+		marker := ""
+		for {
+			resp, err := bucket.List(options.Get.Prefix, "", marker, 1000)
+			if err != nil {
+				log.Printf("Could not list items in bucket: %s", err)
+			}
+			for _, item := range resp.Contents {
+				c <- &Item{
+					Prefix:   options.Get.Prefix,
+					Path:     item.Key,
+					FileInfo: nil,
+				}
+				marker = item.Key
+			}
+			if !resp.IsTruncated {
+				break
 			}
 		}
 		close(c)
