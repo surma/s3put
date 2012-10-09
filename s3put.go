@@ -47,16 +47,18 @@ func main() {
 	c := make(chan Item)
 	go func() {
 		for _, prefix := range options.Remainder {
-			if !filepath.IsAbs(prefix) {
-				log.Printf("Path %s is not absolute", prefix)
+			newprefix, err := filepath.Abs(prefix)
+			if err != nil {
+				log.Printf("Path %s could not be made absolute: %s", prefix, err)
 				continue
 			}
-			filepath.Walk(prefix, func(path string, info os.FileInfo, err error) error {
+			log.Printf("Traversing %s...", newprefix)
+			filepath.Walk(newprefix, func(path string, info os.FileInfo, err error) error {
 				if info.IsDir() {
 					return nil
 				}
 				c <- Item{
-					Prefix:   prefix,
+					Prefix:   newprefix,
 					Path:     path,
 					FileInfo: info,
 				}
