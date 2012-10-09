@@ -183,10 +183,16 @@ func getFiles(bucket *s3.Bucket, c <-chan *Item) {
 					dirname, fname := filepath.Split(itempath)
 					dirname = filepath.Join(options.Remainder[0], dirname)
 
-					os.MkdirAll(dirname, os.FileMode(0755))
+					err := os.MkdirAll(dirname, os.FileMode(0755))
+					if err != nil {
+						log.Printf("Could not create target folder %s: %s", dirname, err)
+						return
+					}
+
 					f, err := os.Create(filepath.Join(dirname, fname))
 					if err != nil {
 						log.Printf("Opening %s failed: %s", item.Path, err)
+						return
 					}
 					defer f.Close()
 
