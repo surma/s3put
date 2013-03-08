@@ -4,4 +4,4 @@ Originally, it has been written during an S3 upload which was taking too long, b
 
 Later, the capability for getting buckets and copying them to the local disk was added.
 ---
-Version 1.0.1
+Version 1.0.2
