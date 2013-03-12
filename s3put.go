@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	VERSION = "1.0.2"
+	VERSION = "1.1.0"
 )
 
 type Item struct {
@@ -26,9 +26,9 @@ var (
 	options = struct {
 		AccessKey   string        `goptions:"-k, --access-key, obligatory, description='AWS Access Key ID'"`
 		SecretKey   string        `goptions:"-s, --secret-key, obligatory, description='AWS Secret Access Key'"`
-		Region      string        `goptions:"-r, --region, description='API Region name (default: us-west-1)'"`
+		Region      string        `goptions:"-r, --region, description='API Region name'"`
 		Bucket      string        `goptions:"-b, --bucket, obligatory, description='Bucket to push to'"`
-		Concurrency int           `goptions:"-c, --concurrency, description='Number of coroutines (default: 10)'"`
+		Concurrency int           `goptions:"-c, --concurrency, description='Number of coroutines'"`
 		Continue    bool          `goptions:"--continue, description='Continue on error'"`
 		Help        goptions.Help `goptions:"-h, --help, description='Show this help'"`
 		goptions.Remainder
