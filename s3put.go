@@ -24,11 +24,13 @@ type Item struct {
 
 var (
 	options = struct {
-		AccessKey   string `goptions:"-k, --access-key, obligatory, description='AWS Access Key ID'"`
-		SecretKey   string `goptions:"-s, --secret-key, obligatory, description='AWS Secret Access Key'"`
-		Region      string `goptions:"-r, --region, description='API Region name (default: us-west-1)'"`
-		Bucket      string `goptions:"-b, --bucket, obligatory, description='Bucket to push to'"`
-		Concurrency int    `goptions:"-c, --concurrency, description='Number of coroutines (default: 10)'"`
+		AccessKey   string        `goptions:"-k, --access-key, obligatory, description='AWS Access Key ID'"`
+		SecretKey   string        `goptions:"-s, --secret-key, obligatory, description='AWS Secret Access Key'"`
+		Region      string        `goptions:"-r, --region, description='API Region name (default: us-west-1)'"`
+		Bucket      string        `goptions:"-b, --bucket, obligatory, description='Bucket to push to'"`
+		Concurrency int           `goptions:"-c, --concurrency, description='Number of coroutines (default: 10)'"`
+		Continue    bool          `goptions:"--continue, description='Continue on error'"`
+		Help        goptions.Help `goptions:"-h, --help, description='Show this help'"`
 		goptions.Remainder
 		goptions.Verbs
 		Put struct {
@@ -41,6 +43,10 @@ var (
 		Concurrency: 10,
 		Region:      aws.USWest.Name,
 	}
+
+	logger = func(format string, v ...interface{}) {
+		log.Fatalf(format, v...)
+	}
 )
 
 func init() {
@@ -52,7 +58,11 @@ func init() {
 		goptions.PrintHelp()
 		os.Exit(1)
 	}
-
+	if options.Continue {
+		logger = func(format string, v ...interface{}) {
+			log.Printf(format, v...)
+		}
+	}
 }
 
 func main() {
@@ -82,15 +92,16 @@ func main() {
 func listLocalFiles(path ...string) <-chan *Item {
 	c := make(chan *Item)
 	go func() {
+		defer close(c)
 		for _, prefix := range options.Remainder {
 			newprefix, err := filepath.Abs(prefix)
 			if err != nil {
-				log.Printf("Path %s could not be made absolute: %s. Skipping...", prefix, err)
+				logger("Path %s could not be made absolute: %s. Skipping...", prefix, err)
 				continue
 			}
 			if fi, err := os.Stat(newprefix); err != nil || !fi.IsDir() {
 				if err != nil {
-					log.Printf("Could not stat %s: %s. Skipping...", newprefix, err)
+					logger("Could not stat %s: %s. Skipping...", newprefix, err)
 				} else if !fi.IsDir() {
 					c <- &Item{
 						Prefix:   filepath.Dir(newprefix),
@@ -113,7 +124,6 @@ func listLocalFiles(path ...string) <-chan *Item {
 				return nil
 			})
 		}
-		close(c)
 	}()
 	return c
 }
@@ -122,10 +132,12 @@ func listBucketFiles(bucket *s3.Bucket) <-chan *Item {
 	c := make(chan *Item)
 	go func() {
 		marker := ""
+		defer close(c)
 		for {
 			resp, err := bucket.List(options.Get.Prefix, "", marker, 1000)
 			if err != nil {
-				log.Printf("Could not list items in bucket: %s", err)
+				logger("Could not list items in bucket: %s", err)
+				return
 			}
 			for _, item := range resp.Contents {
 				c <- &Item{
@@ -139,7 +151,6 @@ func listBucketFiles(bucket *s3.Bucket) <-chan *Item {
 				break
 			}
 		}
-		close(c)
 	}()
 	return c
 }
@@ -153,14 +164,15 @@ func putFiles(bucket *s3.Bucket, c <-chan *Item) {
 				func() {
 					f, err := os.Open(item.Path)
 					if err != nil {
-						log.Printf("Pushing %s failed: %s", item.Path, err)
+						logger("Pushing %s failed: %s", item.Path, err)
+						return
 					}
 					defer f.Close()
 
 					path := item.Path[len(item.Prefix)+1:]
 					err = bucket.PutReader(options.Put.Prefix+path, f, item.FileInfo.Size(), mime.TypeByExtension(filepath.Ext(item.Path)), s3.BucketOwnerFull)
 					if err != nil {
-						log.Printf("Uploading %s failed: %s", path, err)
+						logger("Uploading %s failed: %s", path, err)
 						return
 					}
 					log.Printf("Uploading %s done", path)
@@ -185,20 +197,20 @@ func getFiles(bucket *s3.Bucket, c <-chan *Item) {
 
 					err := os.MkdirAll(dirname, os.FileMode(0755))
 					if err != nil {
-						log.Printf("Could not create target folder %s: %s", dirname, err)
+						logger("Could not create target folder %s: %s", dirname, err)
 						return
 					}
 
 					f, err := os.Create(filepath.Join(dirname, fname))
 					if err != nil {
-						log.Printf("Opening %s failed: %s", item.Path, err)
+						logger("Opening %s failed: %s", item.Path, err)
 						return
 					}
 					defer f.Close()
 
 					rc, err := bucket.GetReader(item.Path)
 					if err != nil {
-						log.Printf("Downloading %s failed: %s", item.Path, err)
+						logger("Downloading %s failed: %s", item.Path, err)
 						return
 					}
 					defer rc.Close()
