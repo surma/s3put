@@ -1,8 +1,26 @@
 `s3put` is a really quick'n'dirty CLI app for s3.
 
 Originally, it has been written during an S3 upload which was taking too long, because there are no tools which support multiple parallel uploads. `s3put` does.
-
 Later, the capability for getting buckets and copying them to the local disk was added.
+
+## Usage
+
+	Usage: s3put [global options] <verb> [verb options]
+
+	Global options:
+	        -k, --access-key  AWS Access Key ID (*)
+	        -s, --secret-key  AWS Secret Access Key (*)
+	        -r, --region      API Region name (default: us-west-1)
+	        -b, --bucket      Bucket to push to (*)
+	        -c, --concurrency Number of coroutines (default: 10)
+	            --continue    Continue on error
+	        -h, --help        Show this help
+
+	Verbs:
+	    get:
+	        -p, --prefix      Only get items starting with prefix
+	    put:
+	        -p, --prefix      Prefix to prepend to the items
 
 ## Binaries
 
@@ -19,4 +37,4 @@ Later, the capability for getting buckets and copying them to the local disk was
 * [Windows amd64](http://filedump.surmair.de/binaries/s3put/windows_amd64/s3put.exe)
 
 ---
-Version 1.0.2
+Version 1.1.0
