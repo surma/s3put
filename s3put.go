@@ -96,12 +96,12 @@ func listLocalFiles(path ...string) <-chan *Item {
 		for _, prefix := range options.Remainder {
 			newprefix, err := filepath.Abs(prefix)
 			if err != nil {
-				logger("Path %s could not be made absolute: %s. Skipping...", prefix, err)
+				logger("Path %s could not be made absolute: %s", prefix, err)
 				continue
 			}
 			if fi, err := os.Stat(newprefix); err != nil || !fi.IsDir() {
 				if err != nil {
-					logger("Could not stat %s: %s. Skipping...", newprefix, err)
+					logger("Could not stat %s: %s", newprefix, err)
 				} else if !fi.IsDir() {
 					c <- &Item{
 						Prefix:   filepath.Dir(newprefix),
@@ -164,7 +164,7 @@ func putFiles(bucket *s3.Bucket, c <-chan *Item) {
 				func() {
 					f, err := os.Open(item.Path)
 					if err != nil {
-						logger("Pushing %s failed: %s", item.Path, err)
+						logger("Opening local %s failed: %s", item.Path, err)
 						return
 					}
 					defer f.Close()
