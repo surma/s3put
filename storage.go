@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"mime"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,12 +15,16 @@ import (
 
 	"launchpad.net/goamz/aws"
 	"launchpad.net/goamz/s3"
+
+	"code.google.com/p/goauth2/oauth"
+	"code.google.com/p/goauth2/oauth/jwt"
+	gcsStorage "code.google.com/p/google-api-go-client/storage/v1beta2"
 )
 
 type Item struct {
 	Prefix string
 	Path   string
-	os.FileInfo
+	Size   int64
 	io.ReadCloser
 }
 
@@ -76,18 +82,19 @@ func (s *S3Storage) ListFiles() <-chan *Item {
 		for {
 			resp, err := s.bucket.List(s.prefix, "", marker, 1000)
 			if err != nil {
-				log.Printf("Could not list items in bucket: %s", err)
+				log.Printf("Could not list items in bucket %s: %s", s.bucket.Name, err)
 				return
 			}
 			for _, item := range resp.Contents {
 				rc, err := s.bucket.GetReader(item.Key)
 				if err != nil {
 					log.Printf("Could not receive %s: %s", item, err)
+					continue
 				}
 				c <- &Item{
 					Prefix:     s.prefix,
 					Path:       item.Key,
-					FileInfo:   nil,
+					Size:       item.Size,
 					ReadCloser: rc,
 				}
 				marker = item.Key
@@ -104,7 +111,7 @@ func (s *S3Storage) PutFile(item *Item) error {
 	defer item.Close()
 	path := strings.TrimPrefix(item.Path, item.Prefix)
 	key := filepath.Join(s.prefix, path)
-	err := s.bucket.PutReader(key, item, item.Size(), mime.TypeByExtension(filepath.Ext(item.Path)), s3.BucketOwnerFull)
+	err := s.bucket.PutReader(key, item, item.Size, mime.TypeByExtension(filepath.Ext(item.Path)), s3.BucketOwnerFull)
 	if err != nil {
 		return err
 	}
@@ -112,15 +119,65 @@ func (s *S3Storage) PutFile(item *Item) error {
 }
 
 type GcsStorage struct {
+	service *gcsStorage.Service
+	bucket  string
+	prefix  string
+	client  *http.Client
 }
 
-func NewGcsStorage() (*GcsStorage, error) {
-	return &GcsStorage{}, nil
+func NewGcsStorage(clientId string, pem io.ReadCloser, bucket, prefix string) (*GcsStorage, error) {
+	pemBytes, err := ioutil.ReadAll(pem)
+	if err != nil {
+		return nil, err
+	}
+
+	token := jwt.NewToken(clientId, gcsStorage.DevstorageRead_writeScope, pemBytes)
+	c := &http.Client{}
+	oauthToken, err := token.Assert(c)
+	if err != nil {
+		return nil, err
+	}
+
+	c.Transport = &oauth.Transport{
+		Token: oauthToken,
+	}
+	service, err := gcsStorage.New(c)
+	if err != nil {
+		return nil, err
+	}
+	return &GcsStorage{
+		service: service,
+		bucket:  bucket,
+		prefix:  prefix,
+		client:  c,
+	}, nil
 }
 
 func (s *GcsStorage) ListFiles() <-chan *Item {
-	log.Printf("Listing not implemented")
-	return make(chan *Item)
+	c := make(chan *Item)
+	go func() {
+		defer close(c)
+		objs, err := s.service.Objects.List(s.bucket).Prefix(s.prefix).Do()
+		if err != nil {
+			log.Printf("Could not list items in bucket %s: %s", s.bucket, err)
+			return
+		}
+
+		for _, obj := range objs.Items {
+			resp, err := s.client.Get(obj.MediaLink)
+			if err != nil {
+				log.Printf("Could not get %s: %s", obj.Name, err)
+				continue
+			}
+			c <- &Item{
+				Prefix:     s.prefix,
+				Path:       obj.Name,
+				Size:       int64(obj.Size),
+				ReadCloser: resp.Body,
+			}
+		}
+	}()
+	return c
 }
 
 func (s *GcsStorage) PutFile(item *Item) error {
@@ -155,7 +212,7 @@ func (s *LocalStorage) ListFiles() <-chan *Item {
 			c <- &Item{
 				Prefix:     filepath.Dir(newprefix),
 				Path:       newprefix,
-				FileInfo:   fi,
+				Size:       fi.Size(),
 				ReadCloser: f,
 			}
 			return
@@ -173,7 +230,6 @@ func (s *LocalStorage) ListFiles() <-chan *Item {
 			c <- &Item{
 				Prefix:     newprefix,
 				Path:       path,
-				FileInfo:   info,
 				ReadCloser: f,
 			}
 			return nil

@@ -60,7 +60,7 @@ func main() {
 	var verb string
 	switch options.Verbs {
 	case "gcs":
-		s, err = NewGcsStorage()
+		s, err = NewGcsStorage(options.GCS.ClientId, options.GCS.KeyFile, options.GCS.Bucket, options.Prefix)
 		verb = string(options.GCS.Verbs)
 	case "s3":
 		s, err = NewS3Storage(options.S3.AccessKey, options.S3.SecretKey, options.S3.Bucket, options.Prefix)
