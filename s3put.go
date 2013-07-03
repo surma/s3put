@@ -15,7 +15,7 @@ var (
 	options = struct {
 		Concurrency int           `goptions:"-c, --concurrency, description='Number of coroutines'"`
 		Continue    bool          `goptions:"--continue, description='Continue on error'"`
-		Prefix      string        `goptions:"-p, --prefix, description='Prefix to put files to/get files from'"`
+		Prefix      string        `goptions:"-p, --prefix, description='Prefix to apply to remote storage'"`
 		Help        goptions.Help `goptions:"-h, --help, description='Show this help'"`
 		goptions.Remainder
 
@@ -76,10 +76,10 @@ func main() {
 	case "put":
 		dst = s
 		ls := &LocalStorage{options.Remainder[0]}
-		items = ls.ListFiles("")
+		items = ls.ListFiles()
 	case "get":
 		dst = &LocalStorage{options.Remainder[0]}
-		items = s.ListFiles(options.Prefix)
+		items = s.ListFiles()
 	}
 	CopyItems(dst, items, options.Concurrency)
 }

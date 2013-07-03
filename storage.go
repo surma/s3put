@@ -27,7 +27,7 @@ func (i *Item) String() string {
 }
 
 type Storage interface {
-	ListFiles(prefix string) <-chan *Item
+	ListFiles() <-chan *Item
 	PutFile(item *Item) error
 }
 
@@ -68,13 +68,13 @@ func regionByEndpoint(ep string) (aws.Region, error) {
 	return aws.Region{}, fmt.Errorf("Unknown region endpoint %s", ep)
 }
 
-func (s *S3Storage) ListFiles(prefix string) <-chan *Item {
+func (s *S3Storage) ListFiles() <-chan *Item {
 	c := make(chan *Item)
 	go func() {
 		marker := ""
 		defer close(c)
 		for {
-			resp, err := s.bucket.List(prefix, "", marker, 1000)
+			resp, err := s.bucket.List(s.prefix, "", marker, 1000)
 			if err != nil {
 				log.Printf("Could not list items in bucket: %s", err)
 				return
@@ -85,7 +85,7 @@ func (s *S3Storage) ListFiles(prefix string) <-chan *Item {
 					log.Printf("Could not receive %s: %s", item, err)
 				}
 				c <- &Item{
-					Prefix:     prefix,
+					Prefix:     s.prefix,
 					Path:       item.Key,
 					FileInfo:   nil,
 					ReadCloser: rc,
@@ -118,8 +118,8 @@ func NewGcsStorage() (*GcsStorage, error) {
 	return &GcsStorage{}, nil
 }
 
-func (s *GcsStorage) ListFiles(prefix string) <-chan *Item {
-	log.Printf("Listing %s not implemented", prefix)
+func (s *GcsStorage) ListFiles() <-chan *Item {
+	log.Printf("Listing not implemented")
 	return make(chan *Item)
 }
 
@@ -129,15 +129,14 @@ func (s *GcsStorage) PutFile(item *Item) error {
 }
 
 type LocalStorage struct {
-	Path string
+	Prefix string
 }
 
-func (s *LocalStorage) ListFiles(prefix string) <-chan *Item {
+func (s *LocalStorage) ListFiles() <-chan *Item {
 	c := make(chan *Item)
 	go func() {
 		defer close(c)
-		newprefix := filepath.Join(s.Path, prefix)
-		newprefix, err := filepath.Abs(newprefix)
+		newprefix, err := filepath.Abs(s.Prefix)
 		if err != nil {
 			log.Printf("Path %s could not be made absolute: %s", newprefix, err)
 			return
@@ -187,7 +186,7 @@ func (s *LocalStorage) PutFile(item *Item) error {
 	defer item.Close()
 	itempath := strings.TrimPrefix(item.Path, item.Prefix)
 	dirname, fname := filepath.Split(itempath)
-	dirname = filepath.Join(s.Path, dirname)
+	dirname = filepath.Join(s.Prefix, dirname)
 
 	err := os.MkdirAll(dirname, os.FileMode(0755))
 	if err != nil {
