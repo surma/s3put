@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"launchpad.net/goamz/aws"
 	"launchpad.net/goamz/s3"
@@ -17,6 +18,7 @@ type Item struct {
 	Prefix string
 	Path   string
 	os.FileInfo
+	io.ReadCloser
 }
 
 func (i *Item) String() string {
@@ -25,7 +27,7 @@ func (i *Item) String() string {
 
 type Storage interface {
 	ListFiles(prefix string) <-chan *Item
-	PutFile(item *Item, content io.Reader) error
+	PutFile(item *Item) error
 }
 
 type S3Storage struct {
@@ -71,14 +73,19 @@ func (s *S3Storage) ListFiles(prefix string) <-chan *Item {
 		for {
 			resp, err := s.bucket.List(prefix, "", marker, 1000)
 			if err != nil {
-				logger("Could not list items in bucket: %s", err)
+				log.Printf("Could not list items in bucket: %s", err)
 				return
 			}
 			for _, item := range resp.Contents {
+				rc, err := s.bucket.GetReader(item.Key)
+				if err != nil {
+					log.Printf("Could not receive %s: %s", item, err)
+				}
 				c <- &Item{
-					Prefix:   prefix,
-					Path:     item.Key,
-					FileInfo: nil,
+					Prefix:     prefix,
+					Path:       item.Key,
+					FileInfo:   nil,
+					ReadCloser: rc,
 				}
 				marker = item.Key
 			}
@@ -90,7 +97,7 @@ func (s *S3Storage) ListFiles(prefix string) <-chan *Item {
 	return c
 }
 
-func (s *S3Storage) PutFile(item *Item, content io.Reader) error {
+func (s *S3Storage) PutFile(item *Item) error {
 	log.Printf("Putting %s not implemented", item)
 	return nil
 }
@@ -107,7 +114,7 @@ func (s *GcsStorage) ListFiles(prefix string) <-chan *Item {
 	return make(chan *Item)
 }
 
-func (s *GcsStorage) PutFile(item *Item, content io.Reader) error {
+func (s *GcsStorage) PutFile(item *Item) error {
 	log.Printf("Putting %s not implemented", item)
 	return nil
 }
@@ -120,20 +127,28 @@ func (s *LocalStorage) ListFiles(prefix string) <-chan *Item {
 	c := make(chan *Item)
 	go func() {
 		defer close(c)
-		newprefix, err := filepath.Abs(prefix)
+		newprefix := filepath.Join(s.Path, prefix)
+		newprefix, err := filepath.Abs(newprefix)
 		if err != nil {
-			logger("Path %s could not be made absolute: %s", prefix, err)
+			log.Printf("Path %s could not be made absolute: %s", newprefix, err)
 			return
 		}
-		if fi, err := os.Stat(newprefix); err != nil || !fi.IsDir() {
-			if err != nil {
-				logger("Could not stat %s: %s", newprefix, err)
-			} else if !fi.IsDir() {
-				c <- &Item{
-					Prefix:   filepath.Dir(newprefix),
-					Path:     newprefix,
-					FileInfo: fi,
-				}
+		f, err := os.Open(newprefix)
+		if err != nil {
+			log.Printf("Could not open %s: %s", newprefix, err)
+			return
+		}
+		fi, err := f.Stat()
+		if err != nil {
+			log.Printf("Could not stat %s: %s", newprefix, err)
+			return
+		}
+		if !fi.IsDir() {
+			c <- &Item{
+				Prefix:     filepath.Dir(newprefix),
+				Path:       newprefix,
+				FileInfo:   fi,
+				ReadCloser: f,
 			}
 			return
 		}
@@ -153,8 +168,8 @@ func (s *LocalStorage) ListFiles(prefix string) <-chan *Item {
 	return c
 }
 
-func (s *LocalStorage) PutFile(item *Item, data io.ReadCloser) error {
-	defer data.Close()
+func (s *LocalStorage) PutFile(item *Item) error {
+	defer item.Close()
 	itempath := strings.TrimPrefix(item.Path, item.Prefix)
 	dirname, fname := filepath.Split(itempath)
 	dirname = filepath.Join(s.Path, dirname)
@@ -170,6 +185,21 @@ func (s *LocalStorage) PutFile(item *Item, data io.ReadCloser) error {
 	}
 	defer f.Close()
 
-	io.Copy(f, data)
+	io.Copy(f, item)
 	return nil
+}
+
+func CopyItems(dst Storage, items <-chan *Item, concurrency int) {
+	wg := &sync.WaitGroup{}
+	wg.Add(concurrency)
+	log.Printf("Starting %d goroutines...", concurrency)
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			defer wg.Done()
+			for item := range items {
+				dst.PutFile(item)
+			}
+		}()
+	}
+	wg.Wait()
 }

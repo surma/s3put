@@ -26,10 +26,8 @@ var (
 			Bucket    string `goptions:"-b, --bucket, obligatory, description='Bucket URL to push to'"`
 
 			goptions.Verbs
-			Put struct {
-			} `goptions:"put"`
-			Get struct {
-			} `goptions:"get"`
+			Put struct{} `goptions:"put"`
+			Get struct{} `goptions:"get"`
 		} `goptions:"s3"`
 		GCS struct {
 			ClientId string   `goptions:"-c, --client-id, description='ClientID', obligatory"`
@@ -37,12 +35,12 @@ var (
 			Bucket   string   `goptions:"-b, --bucket, description='Name of bucket', obligatory"`
 
 			goptions.Verbs
-			Put struct {
-			} `goptions:"put"`
-			Get struct {
-			} `goptions:"get"`
+			Put struct{} `goptions:"put"`
+			Get struct{} `goptions:"get"`
 		} `goptions:"gcs"`
-	}{}
+	}{
+		Concurrency: 10,
+	}
 	logger = func(format string, v ...interface{}) {
 		log.Fatalf(format, v...)
 	}
@@ -70,11 +68,9 @@ func main() {
 	var verb string
 	switch options.Verbs {
 	case "gcs":
-		log.Printf("Choosing gcs")
 		s, err = NewGcsStorage()
 		verb = string(options.GCS.Verbs)
 	case "s3":
-		log.Printf("Choosing s3")
 		s, err = NewS3Storage(options.S3.AccessKey, options.S3.SecretKey, options.S3.Bucket)
 		verb = string(options.S3.Verbs)
 	}
@@ -82,14 +78,16 @@ func main() {
 		log.Fatalf("Invalid storage credentials: %s", err)
 	}
 
+	var dst Storage
+	var items <-chan *Item
 	switch verb {
 	case "put":
-		log.Printf("Not implemented")
+		dst = s
+		ls := &LocalStorage{options.Remainder[0]}
+		items = ls.ListFiles("")
 	case "get":
-		log.Printf("Getting")
-		c := s.ListFiles(options.Prefix)
-		for item := range c {
-			log.Printf("%s", item)
-		}
+		dst = &LocalStorage{options.Remainder[0]}
+		items = s.ListFiles(options.Prefix)
 	}
+	CopyItems(dst, items, options.Concurrency)
 }
