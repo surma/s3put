@@ -33,7 +33,11 @@ func (i *Item) String() string {
 }
 
 type Storage interface {
+	// Lists all files in the storage system. Any kind of
+	// chrooting/prefixing has to be implemented and enforced manually.
 	ListFiles() <-chan *Item
+	// Saves a file to the storage system. Any kind of
+	// chrooting/prefixing has to be implemented and enforced manually.
 	PutFile(item *Item) error
 }
 
@@ -181,7 +185,11 @@ func (s *GcsStorage) ListFiles() <-chan *Item {
 }
 
 func (s *GcsStorage) PutFile(item *Item) error {
-	log.Printf("Putting %s not implemented", item)
+	newprefix := strings.TrimPrefix(item.Path, item.Prefix)
+	_, err := s.service.Objects.Insert(s.bucket, &gcsStorage.Object{}).Name(filepath.Join(s.prefix, newprefix)).Media(item).Do()
+	if err != nil {
+		log.Fatalf("Could not create new object: %s", err)
+	}
 	return nil
 }
 
