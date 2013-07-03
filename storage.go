@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ type Item struct {
 }
 
 func (i *Item) String() string {
-	return fmt.Sprintf("(%s/)%s", i.Prefix, i.Path)
+	return fmt.Sprintf("(Prefix: %s) %s", i.Prefix, i.Path)
 }
 
 type Storage interface {
@@ -32,9 +33,10 @@ type Storage interface {
 
 type S3Storage struct {
 	bucket *s3.Bucket
+	prefix string
 }
 
-func NewS3Storage(accessKey, secretKey, bucketUrl string) (*S3Storage, error) {
+func NewS3Storage(accessKey, secretKey, bucketUrl string, prefix string) (*S3Storage, error) {
 	auth := aws.Auth{
 		AccessKey: accessKey,
 		SecretKey: secretKey,
@@ -53,6 +55,7 @@ func NewS3Storage(accessKey, secretKey, bucketUrl string) (*S3Storage, error) {
 	b := s3i.Bucket(bucketname)
 	return &S3Storage{
 		bucket: b,
+		prefix: prefix,
 	}, nil
 }
 
@@ -98,7 +101,13 @@ func (s *S3Storage) ListFiles(prefix string) <-chan *Item {
 }
 
 func (s *S3Storage) PutFile(item *Item) error {
-	log.Printf("Putting %s not implemented", item)
+	defer item.Close()
+	path := strings.TrimPrefix(item.Path, item.Prefix)
+	key := filepath.Join(s.prefix, path)
+	err := s.bucket.PutReader(key, item, item.Size(), mime.TypeByExtension(filepath.Ext(item.Path)), s3.BucketOwnerFull)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -157,10 +166,16 @@ func (s *LocalStorage) ListFiles(prefix string) <-chan *Item {
 			if info.IsDir() {
 				return nil
 			}
+			f, err := os.Open(path)
+			if err != nil {
+				log.Printf("Could not open %s: %s", path, err)
+				return nil
+			}
 			c <- &Item{
-				Prefix:   newprefix,
-				Path:     path,
-				FileInfo: info,
+				Prefix:     newprefix,
+				Path:       path,
+				FileInfo:   info,
+				ReadCloser: f,
 			}
 			return nil
 		})
@@ -198,6 +213,7 @@ func CopyItems(dst Storage, items <-chan *Item, concurrency int) {
 			defer wg.Done()
 			for item := range items {
 				dst.PutFile(item)
+				log.Printf("Transfer of %s done", item)
 			}
 		}()
 	}

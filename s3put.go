@@ -41,9 +41,6 @@ var (
 	}{
 		Concurrency: 10,
 	}
-	logger = func(format string, v ...interface{}) {
-		log.Fatalf(format, v...)
-	}
 )
 
 func init() {
@@ -54,11 +51,6 @@ func init() {
 		}
 		goptions.PrintHelp()
 		os.Exit(1)
-	}
-	if options.Continue {
-		logger = func(format string, v ...interface{}) {
-			log.Printf(format, v...)
-		}
 	}
 }
 
@@ -71,7 +63,7 @@ func main() {
 		s, err = NewGcsStorage()
 		verb = string(options.GCS.Verbs)
 	case "s3":
-		s, err = NewS3Storage(options.S3.AccessKey, options.S3.SecretKey, options.S3.Bucket)
+		s, err = NewS3Storage(options.S3.AccessKey, options.S3.SecretKey, options.S3.Bucket, options.Prefix)
 		verb = string(options.S3.Verbs)
 	}
 	if err != nil {
