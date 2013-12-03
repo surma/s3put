@@ -3,10 +3,8 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"mime"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -15,10 +13,6 @@ import (
 
 	"launchpad.net/goamz/aws"
 	"launchpad.net/goamz/s3"
-
-	"code.google.com/p/goauth2/oauth"
-	"code.google.com/p/goauth2/oauth/jwt"
-	gcsStorage "code.google.com/p/google-api-go-client/storage/v1beta2"
 )
 
 type Item struct {
@@ -57,7 +51,7 @@ func NewS3Storage(accessKey, secretKey, bucketUrl string, prefix string) (*S3Sto
 	}
 
 	bucketname := strings.SplitN(strings.TrimPrefix(u.Path, "/"), "/", 2)[0]
-	region, err := regionByEndpoint(u.Scheme + "://" + u.Host)
+	region, err := s3RegionByEndpoint(u.Scheme + "://" + u.Host)
 	if err != nil {
 		return nil, err
 	}
@@ -67,15 +61,6 @@ func NewS3Storage(accessKey, secretKey, bucketUrl string, prefix string) (*S3Sto
 		bucket: b,
 		prefix: prefix,
 	}, nil
-}
-
-func regionByEndpoint(ep string) (aws.Region, error) {
-	for _, region := range aws.Regions {
-		if region.S3Endpoint == ep {
-			return region, nil
-		}
-	}
-	return aws.Region{}, fmt.Errorf("Unknown region endpoint %s", ep)
 }
 
 func (s *S3Storage) ListFiles() <-chan *Item {
@@ -122,75 +107,27 @@ func (s *S3Storage) PutFile(item *Item) error {
 	return nil
 }
 
-type GcsStorage struct {
-	service *gcsStorage.Service
-	bucket  string
-	prefix  string
-	client  *http.Client
-}
-
-func NewGcsStorage(clientId string, pem io.ReadCloser, bucket, prefix string) (*GcsStorage, error) {
-	pemBytes, err := ioutil.ReadAll(pem)
+func NewGcsStorage(accessKey, secretKey, bucketUrl string, prefix string) (*S3Storage, error) {
+	auth := aws.Auth{
+		AccessKey: accessKey,
+		SecretKey: secretKey,
+	}
+	u, err := url.Parse(bucketUrl)
 	if err != nil {
 		return nil, err
 	}
 
-	token := jwt.NewToken(clientId, gcsStorage.DevstorageRead_writeScope, pemBytes)
-	c := &http.Client{}
-	oauthToken, err := token.Assert(c)
+	bucketname := strings.SplitN(strings.TrimPrefix(u.Path, "/"), "/", 2)[0]
+	region, err := gcsRegionByEndpoint(u.Scheme + "://" + u.Host)
 	if err != nil {
 		return nil, err
 	}
-
-	c.Transport = &oauth.Transport{
-		Token: oauthToken,
-	}
-	service, err := gcsStorage.New(c)
-	if err != nil {
-		return nil, err
-	}
-	return &GcsStorage{
-		service: service,
-		bucket:  bucket,
-		prefix:  prefix,
-		client:  c,
+	s3i := s3.New(auth, region)
+	b := s3i.Bucket(bucketname)
+	return &S3Storage{
+		bucket: b,
+		prefix: prefix,
 	}, nil
-}
-
-func (s *GcsStorage) ListFiles() <-chan *Item {
-	c := make(chan *Item)
-	go func() {
-		defer close(c)
-		objs, err := s.service.Objects.List(s.bucket).Prefix(s.prefix).Do()
-		if err != nil {
-			log.Printf("Could not list items in bucket %s: %s", s.bucket, err)
-			return
-		}
-
-		for _, obj := range objs.Items {
-			resp, err := s.client.Get(obj.MediaLink)
-			if err != nil {
-				log.Printf("Could not get %s: %s", obj.Name, err)
-				continue
-			}
-			c <- &Item{
-				Prefix:     s.prefix,
-				Path:       obj.Name,
-				Size:       int64(obj.Size),
-				ReadCloser: resp.Body,
-			}
-		}
-	}()
-	return c
-}
-
-func (s *GcsStorage) PutFile(item *Item) error {
-	newprefix := strings.TrimPrefix(item.Path, item.Prefix)
-	_, err := s.service.Objects.Insert(s.bucket, &gcsStorage.Object{}).Name(filepath.Join(s.prefix, newprefix)).Media(item).Do()
-	if err != nil {
-		log.Fatalf("Could not create new object: %s", err)
-	}
-	return nil
 }
 
 type LocalStorage struct {
@@ -275,10 +212,30 @@ func CopyItems(dst Storage, items <-chan *Item, concurrency int) {
 		go func() {
 			defer wg.Done()
 			for item := range items {
+				log.Printf("Transfering %s...", item)
 				dst.PutFile(item)
 				log.Printf("Transfer of %s done", item)
 			}
 		}()
 	}
 	wg.Wait()
+}
+
+func s3RegionByEndpoint(ep string) (aws.Region, error) {
+	for _, region := range aws.Regions {
+		if region.S3Endpoint == ep {
+			return region, nil
+		}
+	}
+	return aws.Region{}, fmt.Errorf("Unknown region endpoint %s", ep)
+}
+
+func gcsRegionByEndpoint(ep string) (aws.Region, error) {
+	if ep != "https://storage.googleapis.com" {
+		return aws.Region{}, fmt.Errorf("Unknown region endpoint %s", ep)
+	}
+	return aws.Region{
+		Name:       "Google Cloud Storage",
+		S3Endpoint: ep,
+	}, nil
 }

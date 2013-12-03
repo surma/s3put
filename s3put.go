@@ -30,9 +30,9 @@ var (
 			Get struct{} `goptions:"get"`
 		} `goptions:"s3"`
 		GCS struct {
-			ClientId string   `goptions:"-c, --client-id, description='ClientID', obligatory"`
-			KeyFile  *os.File `goptions:"-k, --key, description='PEM file containing the private key', obligatory, rdonly"`
-			Bucket   string   `goptions:"-b, --bucket, description='Name of bucket', obligatory"`
+			AccessKey string `goptions:"-k, --access-key, obligatory, description='AWS Access Key ID'"`
+			SecretKey string `goptions:"-s, --secret-key, obligatory, description='AWS Secret Access Key'"`
+			Bucket    string `goptions:"-b, --bucket, obligatory, description='Bucket URL to push to'"`
 
 			goptions.Verbs
 			Put struct{} `goptions:"put"`
@@ -60,7 +60,7 @@ func main() {
 	var verb string
 	switch options.Verbs {
 	case "gcs":
-		s, err = NewGcsStorage(options.GCS.ClientId, options.GCS.KeyFile, options.GCS.Bucket, options.Prefix)
+		s, err = NewGcsStorage(options.GCS.AccessKey, options.GCS.SecretKey, options.GCS.Bucket, options.Prefix)
 		verb = string(options.GCS.Verbs)
 	case "s3":
 		s, err = NewS3Storage(options.S3.AccessKey, options.S3.SecretKey, options.S3.Bucket, options.Prefix)
