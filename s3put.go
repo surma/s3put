@@ -81,5 +81,5 @@ func main() {
 		dst = &LocalStorage{options.Remainder[0]}
 		items = s.ListFiles()
 	}
-	CopyItems(dst, items, options.Concurrency)
+	CopyItems(dst, items, options.Concurrency, options.Continue)
 }
