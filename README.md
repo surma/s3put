@@ -15,8 +15,8 @@ Later, the capability for getting buckets and copying them to the local disk was
 
 	Verbs:
 	    gcs:
-	        -k, --access-key  AWS Access Key ID (*)
-	        -s, --secret-key  AWS Secret Access Key (*)
+	        -k, --access-key  GCS Interop Access Key ID (*)
+	        -s, --secret-key  GCS Interop Access Key (*)
 	        -b, --bucket      Bucket URL to push to (*)
 	    s3:
 	        -k, --access-key  AWS Access Key ID (*)
