@@ -1,51 +1,45 @@
 package main
 
 import (
-	"github.com/voxelbrain/goptions"
-	"io"
-	"launchpad.net/goamz/aws"
-	"launchpad.net/goamz/s3"
 	"log"
-	"mime"
 	"os"
-	"path/filepath"
-	"sync"
+
+	"github.com/voxelbrain/goptions"
 )
 
 const (
-	VERSION = "1.1.0"
+	VERSION = "2.0.0"
 )
-
-type Item struct {
-	Prefix string
-	Path   string
-	os.FileInfo
-}
 
 var (
 	options = struct {
-		AccessKey   string        `goptions:"-k, --access-key, obligatory, description='AWS Access Key ID'"`
-		SecretKey   string        `goptions:"-s, --secret-key, obligatory, description='AWS Secret Access Key'"`
-		Region      string        `goptions:"-r, --region, description='API Region name'"`
-		Bucket      string        `goptions:"-b, --bucket, obligatory, description='Bucket to push to'"`
 		Concurrency int           `goptions:"-c, --concurrency, description='Number of coroutines'"`
 		Continue    bool          `goptions:"--continue, description='Continue on error'"`
+		Prefix      string        `goptions:"-p, --prefix, description='Prefix to apply to remote storage'"`
 		Help        goptions.Help `goptions:"-h, --help, description='Show this help'"`
 		goptions.Remainder
+
 		goptions.Verbs
-		Put struct {
-			Prefix string `goptions:"-p, --prefix, description='Prefix to prepend to the items'"`
-		} `goptions:"put"`
-		Get struct {
-			Prefix string `goptions:"-p, --prefix, description='Only get items starting with prefix'"`
-		} `goptions:"get"`
+		S3 struct {
+			AccessKey string `goptions:"-k, --access-key, obligatory, description='AWS Access Key ID'"`
+			SecretKey string `goptions:"-s, --secret-key, obligatory, description='AWS Secret Access Key'"`
+			Bucket    string `goptions:"-b, --bucket, obligatory, description='Bucket URL to push to'"`
+
+			goptions.Verbs
+			Put struct{} `goptions:"put"`
+			Get struct{} `goptions:"get"`
+		} `goptions:"s3"`
+		GCS struct {
+			AccessKey string `goptions:"-k, --access-key, obligatory, description='GCS Interop Access Key ID'"`
+			SecretKey string `goptions:"-s, --secret-key, obligatory, description='GCS Interop Access Key'"`
+			Bucket    string `goptions:"-b, --bucket, obligatory, description='Bucket URL to push to'"`
+
+			goptions.Verbs
+			Put struct{} `goptions:"put"`
+			Get struct{} `goptions:"get"`
+		} `goptions:"gcs"`
 	}{
 		Concurrency: 10,
-		Region:      aws.USWest.Name,
-	}
-
-	logger = func(format string, v ...interface{}) {
-		log.Fatalf(format, v...)
 	}
 )
 
@@ -58,168 +52,34 @@ func init() {
 		goptions.PrintHelp()
 		os.Exit(1)
 	}
-	if options.Continue {
-		logger = func(format string, v ...interface{}) {
-			log.Printf(format, v...)
-		}
-	}
 }
 
 func main() {
-	auth := aws.Auth{
-		AccessKey: options.AccessKey,
-		SecretKey: options.SecretKey,
-	}
-
-	region, ok := aws.Regions[options.Region]
-	if !ok {
-		log.Fatalf("Invalid region name %s", options.Region)
-	}
-
-	s3i := s3.New(auth, region)
-	bucket := s3i.Bucket(options.Bucket)
-
+	var s Storage
+	var err error
+	var verb string
 	switch options.Verbs {
+	case "gcs":
+		s, err = NewGcsStorage(options.GCS.AccessKey, options.GCS.SecretKey, options.GCS.Bucket, options.Prefix)
+		verb = string(options.GCS.Verbs)
+	case "s3":
+		s, err = NewS3Storage(options.S3.AccessKey, options.S3.SecretKey, options.S3.Bucket, options.Prefix)
+		verb = string(options.S3.Verbs)
+	}
+	if err != nil {
+		log.Fatalf("Invalid storage credentials: %s", err)
+	}
+
+	var dst Storage
+	var items <-chan *Item
+	switch verb {
 	case "put":
-		c := listLocalFiles(options.Remainder...)
-		putFiles(bucket, c)
+		dst = s
+		ls := &LocalStorage{options.Remainder[0]}
+		items = ls.ListFiles()
 	case "get":
-		c := listBucketFiles(bucket)
-		getFiles(bucket, c)
+		dst = &LocalStorage{options.Remainder[0]}
+		items = s.ListFiles()
 	}
-}
-
-func listLocalFiles(path ...string) <-chan *Item {
-	c := make(chan *Item)
-	go func() {
-		defer close(c)
-		for _, prefix := range options.Remainder {
-			newprefix, err := filepath.Abs(prefix)
-			if err != nil {
-				logger("Path %s could not be made absolute: %s. Skipping...", prefix, err)
-				continue
-			}
-			if fi, err := os.Stat(newprefix); err != nil || !fi.IsDir() {
-				if err != nil {
-					logger("Could not stat %s: %s. Skipping...", newprefix, err)
-				} else if !fi.IsDir() {
-					c <- &Item{
-						Prefix:   filepath.Dir(newprefix),
-						Path:     newprefix,
-						FileInfo: fi,
-					}
-				}
-				continue
-			}
-			log.Printf("Traversing %s...", newprefix)
-			filepath.Walk(newprefix, func(path string, info os.FileInfo, err error) error {
-				if info.IsDir() {
-					return nil
-				}
-				c <- &Item{
-					Prefix:   newprefix,
-					Path:     path,
-					FileInfo: info,
-				}
-				return nil
-			})
-		}
-	}()
-	return c
-}
-
-func listBucketFiles(bucket *s3.Bucket) <-chan *Item {
-	c := make(chan *Item)
-	go func() {
-		marker := ""
-		defer close(c)
-		for {
-			resp, err := bucket.List(options.Get.Prefix, "", marker, 1000)
-			if err != nil {
-				logger("Could not list items in bucket: %s", err)
-				return
-			}
-			for _, item := range resp.Contents {
-				c <- &Item{
-					Prefix:   options.Get.Prefix,
-					Path:     item.Key,
-					FileInfo: nil,
-				}
-				marker = item.Key
-			}
-			if !resp.IsTruncated {
-				break
-			}
-		}
-	}()
-	return c
-}
-
-func putFiles(bucket *s3.Bucket, c <-chan *Item) {
-	var wg sync.WaitGroup
-	wg.Add(options.Concurrency)
-	for i := 0; i < options.Concurrency; i++ {
-		go func() {
-			for item := range c {
-				func() {
-					f, err := os.Open(item.Path)
-					if err != nil {
-						logger("Pushing %s failed: %s", item.Path, err)
-						return
-					}
-					defer f.Close()
-
-					path := item.Path[len(item.Prefix)+1:]
-					err = bucket.PutReader(options.Put.Prefix+path, f, item.FileInfo.Size(), mime.TypeByExtension(filepath.Ext(item.Path)), s3.BucketOwnerFull)
-					if err != nil {
-						logger("Uploading %s failed: %s", path, err)
-						return
-					}
-					log.Printf("Uploading %s done", path)
-				}()
-			}
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-}
-
-func getFiles(bucket *s3.Bucket, c <-chan *Item) {
-	var wg sync.WaitGroup
-	wg.Add(options.Concurrency)
-	for i := 0; i < options.Concurrency; i++ {
-		go func() {
-			for item := range c {
-				func() {
-					itempath := item.Path[len(item.Prefix):]
-					dirname, fname := filepath.Split(itempath)
-					dirname = filepath.Join(options.Remainder[0], dirname)
-
-					err := os.MkdirAll(dirname, os.FileMode(0755))
-					if err != nil {
-						logger("Could not create target folder %s: %s", dirname, err)
-						return
-					}
-
-					f, err := os.Create(filepath.Join(dirname, fname))
-					if err != nil {
-						logger("Opening %s failed: %s", item.Path, err)
-						return
-					}
-					defer f.Close()
-
-					rc, err := bucket.GetReader(item.Path)
-					if err != nil {
-						logger("Downloading %s failed: %s", item.Path, err)
-						return
-					}
-					defer rc.Close()
-					io.Copy(f, rc)
-					log.Printf("Downloading %s done", item.Path)
-				}()
-			}
-			wg.Done()
-		}()
-	}
-	wg.Wait()
+	CopyItems(dst, items, options.Concurrency)
 }
