@@ -1,4 +1,4 @@
-`s3put` is a really quick'n'dirty CLI app for s3.
+`s3put` is a really quick'n'dirty CLI app for [S3] and [GCS].
 
 Originally, it has been written during an S3 upload which was taking too long, because there are no tools which support multiple parallel uploads. `s3put` does.
 Later, the capability for getting buckets and copying them to the local disk was added.
@@ -8,19 +8,25 @@ Later, the capability for getting buckets and copying them to the local disk was
 	Usage: s3put [global options] <verb> [verb options]
 
 	Global options:
-	        -k, --access-key  AWS Access Key ID (*)
-	        -s, --secret-key  AWS Secret Access Key (*)
-	        -r, --region      API Region name (default: us-west-1)
-	        -b, --bucket      Bucket to push to (*)
 	        -c, --concurrency Number of coroutines (default: 10)
 	            --continue    Continue on error
+	        -p, --prefix      Prefix to apply to remote storage
 	        -h, --help        Show this help
 
 	Verbs:
-	    get:
-	        -p, --prefix      Only get items starting with prefix
-	    put:
-	        -p, --prefix      Prefix to prepend to the items
+	    gcs:
+	        -k, --access-key  AWS Access Key ID (*)
+	        -s, --secret-key  AWS Secret Access Key (*)
+	        -b, --bucket      Bucket URL to push to (*)
+	    s3:
+	        -k, --access-key  AWS Access Key ID (*)
+	        -s, --secret-key  AWS Secret Access Key (*)
+	        -b, --bucket      Bucket URL to push to (*)
+
+### Example
+
+	$ s3put -c 5 gcs -k GOOG2MLXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b https://storage.googleapis.com/some-bucket put .
+	$ s3put -c 10 s3 -k GOOG2MLXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b https://s3.amazonaws.com/some-bucket get .
 
 ## Binaries
 
@@ -37,4 +43,4 @@ Later, the capability for getting buckets and copying them to the local disk was
 * [Windows amd64](http://filedump.surmair.de/binaries/s3put/windows_amd64/s3put.exe)
 
 ---
-Version 1.1.0
+Version 1.2.0
