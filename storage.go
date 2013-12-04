@@ -175,6 +175,7 @@ func (s *LocalStorage) ListFiles() <-chan *Item {
 			c <- &Item{
 				Prefix:     newprefix,
 				Path:       path,
+				Size:       info.Size(),
 				ReadCloser: f,
 			}
 			return nil
@@ -204,7 +205,7 @@ func (s *LocalStorage) PutFile(item *Item) error {
 	return nil
 }
 
-func CopyItems(dst Storage, items <-chan *Item, concurrency int) {
+func CopyItems(dst Storage, items <-chan *Item, concurrency int, continueOnError bool) {
 	wg := &sync.WaitGroup{}
 	wg.Add(concurrency)
 	log.Printf("Starting %d goroutines...", concurrency)
@@ -213,7 +214,16 @@ func CopyItems(dst Storage, items <-chan *Item, concurrency int) {
 			defer wg.Done()
 			for item := range items {
 				log.Printf("Transfering %s...", item)
-				dst.PutFile(item)
+				err := dst.PutFile(item)
+				if err != nil {
+					log.Printf("Could not transfer %s: %s", item, err)
+					if continueOnError {
+						continue
+					} else {
+						log.Fatalf("Aborted.")
+						return
+					}
+				}
 				log.Printf("Transfer of %s done", item)
 			}
 		}()
