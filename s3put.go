@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	VERSION = "1.1.0"
+	VERSION = "2.0.0"
 )
 
 var (
@@ -30,8 +30,8 @@ var (
 			Get struct{} `goptions:"get"`
 		} `goptions:"s3"`
 		GCS struct {
-			AccessKey string `goptions:"-k, --access-key, obligatory, description='AWS Access Key ID'"`
-			SecretKey string `goptions:"-s, --secret-key, obligatory, description='AWS Secret Access Key'"`
+			AccessKey string `goptions:"-k, --access-key, obligatory, description='GCS Interop Access Key ID'"`
+			SecretKey string `goptions:"-s, --secret-key, obligatory, description='GCS Interop Access Key'"`
 			Bucket    string `goptions:"-b, --bucket, obligatory, description='Bucket URL to push to'"`
 
 			goptions.Verbs
