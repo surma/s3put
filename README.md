@@ -43,4 +43,4 @@ Later, the capability for getting buckets and copying them to the local disk was
 * [Windows amd64](http://filedump.surmair.de/binaries/s3put/windows_amd64/s3put.exe)
 
 ---
-Version 1.2.0
+Version 2.0.0
