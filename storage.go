@@ -175,6 +175,7 @@ func (s *LocalStorage) ListFiles() <-chan *Item {
 			c <- &Item{
 				Prefix:     newprefix,
 				Path:       path,
+				Size:       info.Size(),
 				ReadCloser: f,
 			}
 			return nil
