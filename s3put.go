@@ -2,21 +2,23 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/voxelbrain/goptions"
 )
 
 const (
-	VERSION = "2.0.2"
+	VERSION = "2.1.0"
 )
 
 var (
 	options = struct {
-		Concurrency int           `goptions:"-c, --concurrency, description='Number of coroutines'"`
-		Continue    bool          `goptions:"--continue, description='Continue on error'"`
-		Prefix      string        `goptions:"-p, --prefix, description='Prefix to apply to remote storage'"`
-		Help        goptions.Help `goptions:"-h, --help, description='Show this help'"`
+		Concurrency  int           `goptions:"-c, --concurrency, description='Number of coroutines'"`
+		Continue     bool          `goptions:"--continue, description='Continue on error'"`
+		Prefix       string        `goptions:"-p, --prefix, description='Prefix to apply to remote storage'"`
+		CacheControl string        `goptions:"--cache-control, description='Set Cache-Control header on upload'"`
+		Help         goptions.Help `goptions:"-h, --help, description='Show this help'"`
 		goptions.Remainder
 
 		goptions.Verbs
@@ -52,6 +54,11 @@ func init() {
 		goptions.PrintHelp()
 		os.Exit(1)
 	}
+
+	if options.CacheControl != "" {
+		log.Printf("Monkey patching default transport...")
+		monkeyPatchDefaultTransport()
+	}
 }
 
 func main() {
@@ -80,6 +87,31 @@ func main() {
 	case "get":
 		dst = &LocalStorage{options.Remainder[0]}
 		items = s.ListFiles()
+	default:
+		log.Fatalf("Invalid/Missing `put` or `get`")
 	}
 	CopyItems(dst, items, options.Concurrency, options.Continue)
+}
+
+type HeaderPatchRoundTripper struct {
+	http.RoundTripper
+	Headers http.Header
+}
+
+func (hprt *HeaderPatchRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	for h, vs := range hprt.Headers {
+		for _, v := range vs {
+			r.Header.Add(h, v)
+		}
+	}
+	return hprt.RoundTripper.RoundTrip(r)
+}
+
+func monkeyPatchDefaultTransport() {
+	http.DefaultTransport = &HeaderPatchRoundTripper{
+		RoundTripper: http.DefaultTransport,
+		Headers: http.Header{
+			"Cache-Control": []string{options.CacheControl},
+		},
+	}
 }
