@@ -8,10 +8,11 @@ Later, the capability for getting buckets and copying them to the local disk was
 	Usage: s3put [global options] <verb> [verb options]
 
 	Global options:
-	        -c, --concurrency Number of coroutines (default: 10)
-	            --continue    Continue on error
-	        -p, --prefix      Prefix to apply to remote storage
-	        -h, --help        Show this help
+	        -c, --concurrency   Number of coroutines (default: 10)
+	            --continue      Continue on error
+	        -p, --prefix        Prefix to apply to remote storage
+	            --cache-control Set Cache-Control header on upload
+	        -h, --help          Show this help
 
 	Verbs:
 	    gcs:
