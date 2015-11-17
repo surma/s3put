@@ -34,4 +34,4 @@ Later, the capability for getting buckets and copying them to the local disk was
 Binaries can be found in the [release section](https://github.com/surma/s3put/releases).
 
 ---
-Version 2.1.0
+Version 2.1.1
