@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/voxelbrain/goptions"
 )
@@ -18,28 +19,15 @@ var (
 		Continue     bool          `goptions:"--continue, description='Continue on error'"`
 		Prefix       string        `goptions:"-p, --prefix, description='Prefix to apply to remote storage'"`
 		CacheControl string        `goptions:"--cache-control, description='Set Cache-Control header on upload'"`
+		AccessKey    string        `goptions:"-k, --access-key, obligatory, description='AWS Access Key ID'"`
+		SecretKey    string        `goptions:"-s, --secret-key, obligatory, description='AWS Secret Access Key'"`
+		Bucket       string        `goptions:"-b, --bucket, obligatory, description='Bucket URL to push to'"`
 		Help         goptions.Help `goptions:"-h, --help, description='Show this help'"`
 		goptions.Remainder
 
 		goptions.Verbs
-		S3 struct {
-			AccessKey string `goptions:"-k, --access-key, obligatory, description='AWS Access Key ID'"`
-			SecretKey string `goptions:"-s, --secret-key, obligatory, description='AWS Secret Access Key'"`
-			Bucket    string `goptions:"-b, --bucket, obligatory, description='Bucket URL to push to'"`
-
-			goptions.Verbs
-			Put struct{} `goptions:"put"`
-			Get struct{} `goptions:"get"`
-		} `goptions:"s3"`
-		GCS struct {
-			AccessKey string `goptions:"-k, --access-key, obligatory, description='GCS Interop Access Key ID'"`
-			SecretKey string `goptions:"-s, --secret-key, obligatory, description='GCS Interop Access Key'"`
-			Bucket    string `goptions:"-b, --bucket, obligatory, description='Bucket URL to push to'"`
-
-			goptions.Verbs
-			Put struct{} `goptions:"put"`
-			Get struct{} `goptions:"get"`
-		} `goptions:"gcs"`
+		Put struct{} `goptions:"put"`
+		Get struct{} `goptions:"get"`
 	}{
 		Concurrency: 10,
 	}
@@ -64,14 +52,15 @@ func init() {
 func main() {
 	var s Storage
 	var err error
-	var verb string
-	switch options.Verbs {
-	case "gcs":
-		s, err = NewGcsStorage(options.GCS.AccessKey, options.GCS.SecretKey, options.GCS.Bucket, options.Prefix)
-		verb = string(options.GCS.Verbs)
-	case "s3":
-		s, err = NewS3Storage(options.S3.AccessKey, options.S3.SecretKey, options.S3.Bucket, options.Prefix)
-		verb = string(options.S3.Verbs)
+	verb := string(options.Verbs)
+	switch {
+	case strings.HasPrefix(options.Bucket, "gcs:"):
+		bucket := strings.TrimPrefix(options.Bucket, "gcs://")
+		s, err = NewGcsStorage(options.AccessKey, options.SecretKey, "https://"+bucket, options.Prefix)
+	case strings.HasPrefix(options.Bucket, "s3:"):
+		bucket := strings.TrimPrefix(options.Bucket, "s3://")
+		log.Printf("Prefix: %s", bucket)
+		s, err = NewS3Storage(options.AccessKey, options.SecretKey, "https://"+bucket, options.Prefix)
 	}
 	if err != nil {
 		log.Fatalf("Invalid storage credentials: %s", err)
