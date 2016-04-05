@@ -18,8 +18,8 @@ Later, the capability for getting buckets and copying them to the local disk was
 			-h, --help          Show this help
 
 	Verbs:
-		gcs:
-		s3:
+		get:
+		put:
 
 ### Example
 
