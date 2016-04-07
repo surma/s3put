@@ -5,7 +5,7 @@ Later, the capability for getting buckets and copying them to the local disk was
 
 ## Usage
 
-	Usage: s3put [global options] <verb> [verb options]
+	Usage: s3put [global options] <get|put> <files...>
 
 	Global options:
 			-c, --concurrency   Number of coroutines (default: 10)
@@ -17,10 +17,6 @@ Later, the capability for getting buckets and copying them to the local disk was
 			-b, --bucket        Bucket URL to push to (*)
 			-h, --help          Show this help
 
-	Verbs:
-		get:
-		put:
-
 ### Example
 
 	$ s3put -c 5 -k GOOG2MLXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b gcs://storage.googleapis.com/some-bucket put .
@@ -30,5 +26,7 @@ Later, the capability for getting buckets and copying them to the local disk was
 
 Binaries can be found in the [release section](https://github.com/surma/s3put/releases).
 
+[S3]: https://aws.amazon.com/s3/
+[GCS]: https://cloud.google.com/storage/
 ---
-Version 3.0.1
+Version 3.0.2
