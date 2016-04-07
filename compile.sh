@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-PLATFORMS="linux_amd64 darwin_amd64 windows_amd64 linux_386"
+PLATFORMS="linux_amd64 darwin_amd64 windows_amd64 linux_386 windows_386"
 rm -rf binaries &>/dev/null; mkdir binaries
 dir=$(basename $PWD)
 
