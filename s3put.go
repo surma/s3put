@@ -1,16 +1,19 @@
 package main
 
 import (
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/voxelbrain/goptions"
 )
 
 const (
-	VERSION = "3.0.1"
+	VERSION = "3.0.2"
 )
 
 var (
@@ -34,12 +37,14 @@ var (
 )
 
 func init() {
-	err := goptions.Parse(&options)
+	flagSet := goptions.NewFlagSet(filepath.Base(os.Args[0]), &options)
+	flagSet.HelpFunc = helpFunc
+	err := flagSet.Parse(os.Args[1:])
 	if err != nil || len(options.Remainder) <= 0 || len(options.Verbs) <= 0 {
 		if err != goptions.ErrHelpRequest && err != nil {
 			log.Printf("Error: %s", err)
 		}
-		goptions.PrintHelp()
+		flagSet.PrintHelp(os.Stderr)
 		os.Exit(1)
 	}
 
@@ -103,4 +108,29 @@ func monkeyPatchDefaultTransport() {
 			"Cache-Control": []string{options.CacheControl},
 		},
 	}
+}
+
+const (
+	helpTemplate = "\xffUsage: {{.Name}} [global options] <get|put> <files...>\n" +
+		"\n" +
+		"Global options:\xff" +
+		"{{range .Flags}}" +
+		"\n\t" +
+		"\t{{with .Short}}" + "-{{.}}," + "{{end}}" +
+		"\t{{with .Long}}" + "--{{.}}" + "{{end}}" +
+		"\t{{.Description}}" +
+		"{{with .DefaultValue}}" +
+		" (default: {{.}})" +
+		"{{end}}" +
+		"{{if .Obligatory}}" +
+		" (*)" +
+		"{{end}}" +
+		"{{end}}" +
+		"\n"
+)
+
+func helpFunc(w io.Writer, fs *goptions.FlagSet) {
+	tw := tabwriter.NewWriter(w, 4, 4, 1, ' ', tabwriter.StripEscape|tabwriter.DiscardEmptyColumns)
+	goptions.NewTemplatedHelpFunc(helpTemplate)(tw, fs)
+	tw.Flush()
 }
