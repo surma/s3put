@@ -19,8 +19,9 @@ Later, the capability for getting buckets and copying them to the local disk was
 
 ### Example
 
-	$ s3put -c 5 -k GOOG2MLXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b gcs://storage.googleapis.com/some-bucket put .
-	$ s3put -c 10 -k GOOG2MLXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b s3://s3.amazonaws.com/some-bucket get .
+	$ s3put -c 15 -k GOOG2MLXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b gcs://storage.googleapis.com/some-bucket put .
+	$ s3put -c 10 -k XXXXXXXXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b s3://s3.amazonaws.com/some-bucket get .
+	$ s3put -c 10 -k XXXXXXXXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b s3://s3-eu-west-1.amazonaws.com/some-bucket get .
 
 ## Binaries
 
@@ -29,4 +30,4 @@ Binaries can be found in the [release section](https://github.com/surma/s3put/re
 [S3]: https://aws.amazon.com/s3/
 [GCS]: https://cloud.google.com/storage/
 ---
-Version 3.0.2
+Version 3.0.3
