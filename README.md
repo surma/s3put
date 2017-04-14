@@ -30,4 +30,4 @@ Binaries can be found in the [release section](https://github.com/surma/s3put/re
 [S3]: https://aws.amazon.com/s3/
 [GCS]: https://cloud.google.com/storage/
 ---
-Version 3.0.2
+Version 3.0.3
