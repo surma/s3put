@@ -66,9 +66,11 @@ func main() {
 		bucket := strings.TrimPrefix(options.Bucket, "s3://")
 		log.Printf("Prefix: %s", bucket)
 		s, err = NewS3Storage(options.AccessKey, options.SecretKey, "https://"+bucket, options.Prefix)
+	default:
+		log.Fatalf("Bucket addresses must be of the form `gcs://...` or `s3://...` (see README)")
 	}
 	if err != nil {
-		log.Fatalf("Invalid storage credentials: %s", err)
+		log.Fatalf("Invalid storage credentials: %s (use canonical endpoint name, see README)", err)
 	}
 
 	var dst Storage

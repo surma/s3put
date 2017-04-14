@@ -19,8 +19,9 @@ Later, the capability for getting buckets and copying them to the local disk was
 
 ### Example
 
-	$ s3put -c 5 -k GOOG2MLXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b gcs://storage.googleapis.com/some-bucket put .
-	$ s3put -c 10 -k GOOG2MLXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b s3://s3.amazonaws.com/some-bucket get .
+	$ s3put -c 15 -k GOOG2MLXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b gcs://storage.googleapis.com/some-bucket put .
+	$ s3put -c 10 -k XXXXXXXXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b s3://s3.amazonaws.com/some-bucket get .
+	$ s3put -c 10 -k XXXXXXXXXXXXXXXX -s XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -b s3://s3-eu-west-1.amazonaws.com/some-bucket get .
 
 ## Binaries
 
