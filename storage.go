@@ -100,7 +100,7 @@ func (s *S3Storage) PutFile(item *Item) error {
 	defer item.Close()
 	path := strings.TrimPrefix(item.Path, item.Prefix)
 	key := filepath.Join(s.prefix, path)
-	err := s.bucket.PutReader(key, item, item.Size, mime.TypeByExtension(filepath.Ext(item.Path)), s3.PublicRead)
+	err := s.bucket.PutReader(key, item, item.Size, mime.TypeByExtension(filepath.Ext(item.Path)), s3.BucketOwnerFull)
 	if err != nil {
 		return err
 	}
